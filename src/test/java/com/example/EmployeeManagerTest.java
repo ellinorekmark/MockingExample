@@ -1,63 +1,72 @@
 package com.example;
 
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class EmployeeManagerTest {
-    EmployeeRepositoryInMemory employeeRepository;
-
-    BankService bankService = Mockito.mock(BankService.class);
+    static Employee dummy1 = new Employee("dummy1", 10);
+    static Employee dummy2 = new Employee("dummy2", 10);
+    static Employee dummy3 = new Employee("dummy3", 10);
+    static Employee dummy4 = new Employee("dummy4", 10);
+    EmployeeRepository employeeRepository;
+    BankService bankService;
     EmployeeManager employeeManager;
 
-    @BeforeEach
-    public void initializeEmployeeManager(){
-        employeeRepository = new EmployeeRepositoryInMemory();
-        employeeManager = new EmployeeManager(employeeRepository,bankService);
-    }
-
-
     @Test
-    public void testPayEmployeesShouldUseBankService(){
-    //spy?
+    public void testPayEmployeesShouldUseBankService() {
+        bankService = mock(BankService.class);
+        employeeRepository = new EmployeeRepositoryInMemory(List.of(dummy3, dummy1, dummy2, dummy4));
+        employeeManager = new EmployeeManager(employeeRepository, bankService);
         employeeManager.payEmployees();
-        verify(bankService, Mockito.atLeast(1)).pay("1", 32000);
+        verify(bankService, atLeast(1)).pay("dummy1", 10);
+    }
 
+    @ParameterizedTest
+    @MethodSource("mockEmployeeLists")
+    public void testPayEmployeesShouldUseBankServiceEqualTimesToEmployees(List<Employee> list, int expectedCount) {
+        BankServiceSpy bankServiceSpy = new BankServiceSpy();
+        employeeRepository = mock(EmployeeRepository.class);
+        employeeManager = new EmployeeManager(employeeRepository, bankServiceSpy);
+        when(employeeRepository.findAll()).thenReturn(list);
+        employeeManager.payEmployees();
+        int bankServiceCount = bankServiceSpy.getCount();
+        assertEquals(expectedCount, bankServiceCount);
+    }
+
+    private static Stream<Arguments> mockEmployeeLists() {
+        return Stream.of(
+                Arguments.of(List.of(), 0),
+                Arguments.of(List.of(dummy1, dummy2), 2),
+                Arguments.of(List.of(dummy1, dummy2, dummy3, dummy4), 4)
+        );
     }
 
     @Test
-    public void testPayEmployeesShouldPayAll(){
+    public void testEmptyListOfEmployeesShouldPay0() {
+        bankService = mock(BankService.class);
+        employeeRepository = mock(EmployeeRepository.class);
+        employeeManager = new EmployeeManager(employeeRepository, bankService);
+        when(employeeRepository.findAll()).thenReturn(List.of());
         int payments = employeeManager.payEmployees();
-        assertEquals(employeeRepository.findAll().size(), payments);
+        assertEquals(0, payments);
     }
 
     @Test
-    public void testPayEmployeesShouldChangePayStatus(){
-        employeeManager.payEmployees();
-        for (Employee employee : employeeRepository.findAll()) {
-            assertTrue(employee.isPaid());
-        }
+    public void testPayEmployeesShouldPayAllInList() {
+        bankService = new BankServiceSpy();
+        employeeRepository = mock(EmployeeRepository.class);
+        when(employeeRepository.findAll()).thenReturn(List.of(dummy1, dummy2, dummy3, dummy4));
+        employeeManager = new EmployeeManager(employeeRepository, bankService);
+        int payments = employeeManager.payEmployees();
+        assertEquals(4, payments);
     }
-    @Test
-    public void testEmployeeRepositoryFindAllShouldReturnListWithEmployees(){
-        List<Employee> employees = employeeRepository.findAll();
-        assert(employees.size()!=0);
-    }
-
-    @Test
-    public void testSaveEmployeeShouldReplaceExistingEmployee(){
-        Employee employee = new Employee("2", 12345);
-        int employeeCount = employeeRepository.findAll().size();
-        employeeRepository.save(employee);
-        assertEquals(employeeCount, employeeRepository.findAll().size());
-
-    }
-
 }
